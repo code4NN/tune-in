@@ -1,0 +1,15 @@
+# Ignore Python cache and virtual environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+
+# Ignore Streamlit logs and config files
+.streamlit/
+logs/
+
+# Ignore large files
+*.mp3
+*.m4a
