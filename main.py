@@ -49,34 +49,35 @@ def login_page():
     unsafe_allow_html=True
 )
 
-
-    username = st.text_input(":gray[email]")
-    st.markdown("")
-    password = st.text_input(":gray[Password]", type="password")
-    st.markdown("")
-    st.markdown("")
+    cols = st.columns([1,3,1])
+    with cols[1]:
+        username = st.text_input(":gray[email]")
+        st.markdown("")
+        password = st.text_input(":gray[Password]", type="password")
+        st.markdown("")
+        st.markdown("")
     
-    login_button = st.empty()
-    if username and password:
-        login_button.button("Login",on_click=lambda : session.login.update({'start_validation':True}),
-                            key='login-button')
-    else:
-        st.button("Login",disabled=True)
-    
-    if session.login['start_validation']:
-        with st.spinner("Validating Credentials..."):
-            login_button.empty()
-            is_success,response = validate_user_login(username,password)
-            session.login.update({"start_validation":False})
-        
-        if is_success:
-            session.login.update({'is_logged_in':True,'user_creds':response['data']})
-            st.success("Login Successful!")
-            with st.spinner("going to main page..."):
-                time.sleep(1)
-            st.rerun()
+        login_button = st.empty()
+        if username and password:
+            login_button.button("Login",on_click=lambda : session.login.update({'start_validation':True}),
+                                key='login-button')
         else:
-            st.error(response['error'])
+            st.button("Login",disabled=True)
+        
+        if session.login['start_validation']:
+            with st.spinner("Validating Credentials..."):
+                login_button.empty()
+                is_success,response = validate_user_login(username,password)
+                session.login.update({"start_validation":False})
+            
+            if is_success:
+                session.login.update({'is_logged_in':True,'user_creds':response['data']})
+                st.success("Login Successful!")
+                with st.spinner("going to main page..."):
+                    time.sleep(1)
+                st.rerun()
+            else:
+                st.error(response['error'])
 
 
 # ----------- Upload Kirtan ------------
@@ -282,11 +283,25 @@ st.markdown(
 
 # ----------- Main App ------------
 def main():
-    page = 'browse'
-    # if page == "Upload Kirtan":
-    upload_kirtan()
-    # else:
-    #     browse_kirtans()
+    with st.sidebar:
+        st.markdown("## :rainbow[Hare Krishna]")
+        st.divider()
+        
+    page_list = ['browse','upload','youtube']
+    active_page = st.segmented_control("label",label_visibility='collapsed',
+                         options=page_list,selection_mode='single',
+                         default=page_list[0]
+                        )
+    # ==============================================================
+    if not active_page:
+        st.warning("Please select a page")
+    elif active_page=='browse':
+        browse_kirtans()
+    elif active_page=='upload':
+        upload_kirtan()
+    elif active_page=='youtube':
+        st.caption("in progress")
+
 
 if session.login['is_logged_in']:
     main()
