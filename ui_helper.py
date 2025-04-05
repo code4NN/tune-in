@@ -1,6 +1,8 @@
 import streamlit as st
 from audio_manager import is_valid_timestamp
 
+import re
+from urllib.parse import urlparse, parse_qs
 
 
 def get_kirtan_info():
@@ -53,3 +55,36 @@ def get_kirtan_info():
                  "duration":duration,
                  "singer":singer,
                  "tune_name":tune_name}
+    
+def get_video_id():
+    url = st.text_input("Enter youtube url")
+    video_id = extract_youtube_video_id(url)
+    return video_id
+
+
+
+def extract_youtube_video_id(url):
+    parsed_url = urlparse(url)
+
+    # youtu.be/<id>
+    if 'youtu.be' in parsed_url.netloc:
+        return parsed_url.path.lstrip('/')
+
+    # youtube.com/embed/<id>
+    if '/embed/' in parsed_url.path:
+        return parsed_url.path.split('/embed/')[1]
+
+    # youtube.com/shorts/<id>
+    if '/shorts/' in parsed_url.path:
+        return parsed_url.path.split('/shorts/')[1]
+
+    # youtube.com/live/<id>
+    if '/live/' in parsed_url.path:
+        return parsed_url.path.split('/live/')[1]
+
+    # youtube.com/watch?v=<id>
+    if parsed_url.hostname in ['www.youtube.com', 'youtube.com']:
+        query_params = parse_qs(parsed_url.query)
+        return query_params.get('v', [None])[0]
+
+    return None

@@ -7,6 +7,7 @@ from audio_manager import is_valid_timestamp
 
 # addition ui stored seperately
 from ui_helper import get_kirtan_info
+from ui_helper import extract_youtube_video_id
 
 class SessionManager:
     def __init__(self):
@@ -23,6 +24,12 @@ class SessionManager:
             'process_step_1':False,
             'bookmark_list': [{'start_time':0,'start_time_raw':0,'display_time':'0m 0s','tune_hint':''}],
             'process_step_2':False
+        }
+
+        self.noadd_yt = {
+            'yt_id' : None,
+            'video_file_path' : None
+            
         }
 
 if 'session' not in st.session_state:
@@ -267,6 +274,54 @@ def browse_kirtans():
             if st.button(f"Play {label} ({time}s)"):
                 st.audio("example.mp3", start_time=time)  # Replace with actual file
 
+# ----------- Youtube player ------------
+def noadd_youtube():
+    st.markdown("## :rainbow[noadd youtube]")
+    st.markdown(
+    """
+    <style>
+    #login-2-tunein {
+        text-align: center;
+        display: block;
+    }
+    .stButton {
+        text-align: center;
+        display: block;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+    if not session.noadd_yt['yt_id']:
+         url = st.text_input("Enter youtube url")
+         video_id = extract_youtube_video_id(url)
+         if video_id:
+             st.success(f"Video ID: `{video_id}`")
+             st.button("Continue next",
+                       on_click=lambda : session.noadd_yt.update({'yt_id':video_id}))
+         else :
+             st.warning("Enter a valid youtube url")
+             st.markdown("""
+### ✅ Supported YouTube URL Formats
+
+You can input any of the following YouTube URL formats, and the video ID will be correctly extracted:
+
+| URL Format | Example |
+|------------|---------|
+| **Standard Watch URL** | `https://www.youtube.com/watch?v=VIDEO_ID` |
+| **Shortened URL** | `https://youtu.be/VIDEO_ID` |
+| **Embed URL** | `https://www.youtube.com/embed/VIDEO_ID` |
+| **Shorts URL** | `https://www.youtube.com/shorts/VIDEO_ID` |
+| **Live Stream URL** | `https://www.youtube.com/live/VIDEO_ID` |
+""")
+    
+    else:
+        pass
+
+
+
+
 
 # global css
 st.markdown(
@@ -303,7 +358,8 @@ def main():
         st.caption("in progress")
 
 
-if session.login['is_logged_in']:
-    main()
-else:
-    login_page()
+# if session.login['is_logged_in']:
+#     main()
+# else:
+#     login_page()
+noadd_youtube()
