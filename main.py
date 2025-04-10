@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import time
-from database_manager import validate_user_login, upload_kirtan_now
+from database_manager import register_user
+from database_manager import validate_user_login
+from database_manager import upload_kirtan_now
 from audio_manager import trim_audio
 from audio_manager import is_valid_timestamp
 
@@ -15,6 +17,8 @@ class SessionManager:
         self.login = {
             'is_logged_in': False,
             'start_validation':False,
+            'start_registering':False,
+            'existing_username':[],
             'user_creds': None,
         }
         
@@ -54,19 +58,38 @@ def login_page():
     </style>
     """,
     unsafe_allow_html=True
-)
+    )
 
     cols = st.columns([1,3,1])
+    contains_space = lambda x: len(x) !=len(x.replace(" ",''))
+    valid_creds = True
     with cols[1]:
-        username = st.text_input(":gray[email]")
+        username = st.text_input(":gray[username]")
+        if username and contains_space(username):
+            st.caption(":red[username cannot have space]")
+            valid_creds = False
+
         st.markdown("")
         password = st.text_input(":gray[Password]", type="password")
+        if password and contains_space(password):
+            st.caption(":red[password cannot have space]")
+            valid_creds = False
+
         st.markdown("")
         st.markdown("")
     
+        is_registering = st.checkbox(":gray[I don't have an account]")
+        error_msg = st.empty()
         login_button = st.empty()
-        if username and password:
-            login_button.button("Login",on_click=lambda : session.login.update({'start_validation':True}),
+        if is_registering:
+            login_button.button("Register Now",type='primary',
+            on_click=lambda : session.login.update({"start_registering":True}),
+            key='register_button'
+            )
+
+        elif username and password:
+            login_button.button("Login",
+            on_click=lambda : session.login.update({'start_validation':True}),
                                 key='login-button')
         else:
             st.button("Login",disabled=True)
@@ -85,6 +108,23 @@ def login_page():
                 st.rerun()
             else:
                 st.error(response['error'])
+        elif session.login['start_registering']:
+            with st.spinner("Onboarding..."):
+                login_button.empty()
+                is_success,response,problem = register_user(username,password)
+            if is_success:
+                session.login.update({'is_logged_in':True,
+                        'user_creds':response})
+                with st.spinner("going to main page..."):
+                    time.sleep(1)
+                st.rerun()
+            elif problem=='username':
+                error_msg.error("username already exists")
+                session.login.update({'existing_username':response})
+
+
+            
+
 
 
 # ----------- Upload Kirtan ------------
@@ -291,7 +331,7 @@ def noadd_youtube():
     </style>
     """,
     unsafe_allow_html=True
-)
+    )
 
     if not session.noadd_yt['yt_id']:
          url = st.text_input("Enter youtube url")
@@ -303,18 +343,18 @@ def noadd_youtube():
          else :
              st.warning("Enter a valid youtube url")
              st.markdown("""
-### ✅ Supported YouTube URL Formats
+    ### ✅ Supported YouTube URL Formats
 
-You can input any of the following YouTube URL formats, and the video ID will be correctly extracted:
+    You can input any of the following YouTube URL formats, and the video ID will be correctly extracted:
 
-| URL Format | Example |
-|------------|---------|
-| **Standard Watch URL** | `https://www.youtube.com/watch?v=VIDEO_ID` |
-| **Shortened URL** | `https://youtu.be/VIDEO_ID` |
-| **Embed URL** | `https://www.youtube.com/embed/VIDEO_ID` |
-| **Shorts URL** | `https://www.youtube.com/shorts/VIDEO_ID` |
-| **Live Stream URL** | `https://www.youtube.com/live/VIDEO_ID` |
-""")
+    | URL Format | Example |
+    |------------|---------|
+    | **Standard Watch URL** | `https://www.youtube.com/watch?v=VIDEO_ID` |
+    | **Shortened URL** | `https://youtu.be/VIDEO_ID` |
+    | **Embed URL** | `https://www.youtube.com/embed/VIDEO_ID` |
+    | **Shorts URL** | `https://www.youtube.com/shorts/VIDEO_ID` |
+    | **Live Stream URL** | `https://www.youtube.com/live/VIDEO_ID` |
+    """)
     
     else:
         pass
@@ -358,8 +398,8 @@ def main():
         st.caption("in progress")
 
 
-# if session.login['is_logged_in']:
-#     main()
-# else:
-#     login_page()
-noadd_youtube()
+if session.login['is_logged_in']:
+    main()
+else:
+    login_page()
+# noadd_youtube()
