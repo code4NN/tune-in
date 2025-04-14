@@ -1,18 +1,24 @@
 import streamlit as st
 import pandas as pd
 import time
-from database_manager import register_user
-from database_manager import validate_user_login
-from database_manager import upload_kirtan_now
-from audio_manager import trim_audio
-from audio_manager import is_valid_timestamp
+
+from google_connector import SHEET_CONNECTION
+
+from auth import auth_register_me
+from auth import auth_validate_userlogin
+from auth import auth_update_userinfo
 
 # addition ui stored seperately
 from ui_helper import get_kirtan_info
-from ui_helper import extract_youtube_video_id
 
 class SessionManager:
     def __init__(self):
+
+        try:
+            self.conn = SHEET_CONNECTION()
+        except Exception as e:
+            st.error(e)
+            st.stop()
         
         self.login = {
             'is_logged_in': False,
@@ -81,11 +87,20 @@ def login_page():
         is_registering = st.checkbox(":gray[I don't have an account]")
         error_msg = st.empty()
         login_button = st.empty()
+
         if is_registering:
-            login_button.button("Register Now",type='primary',
-            on_click=lambda : session.login.update({"start_registering":True}),
-            key='register_button'
-            )
+            if len(username)<4:
+                error_msg.error("Username should be at least 4 character long")
+            elif username in session.login['existing_username']:
+                error_msg.error("username have been taken by someone")
+
+            elif len(password) <4:
+                error_msg.error("password should be at least 4 character long")
+            else:
+                login_button.button("Register Now",type='primary',
+                on_click=lambda : session.login.update({"start_registering":True}),
+                key='register_button'
+                )
 
         elif username and password:
             login_button.button("Login",
@@ -94,38 +109,45 @@ def login_page():
         else:
             st.button("Login",disabled=True)
         
+        # =========================================================== action ground
         if session.login['start_validation']:
+            session.login.update({'start_validation':False})
+
             with st.spinner("Validating Credentials..."):
                 login_button.empty()
-                is_success,response = validate_user_login(username,password)
+                is_success,response = auth_validate_userlogin(username,password)
                 session.login.update({"start_validation":False})
             
             if is_success:
                 session.login.update({'is_logged_in':True,'user_creds':response['data']})
-                st.success("Login Successful!")
+                error_msg.success("Login Successful!")
                 with st.spinner("going to main page..."):
-                    time.sleep(1)
+                    time.sleep(2)
                 st.rerun()
+            elif response['problem']=='username':
+                error_msg.error("Username does not exist")
+            elif response['problem']=='password':
+                error_msg.error("incorrect password")
             else:
                 st.error(response['error'])
+
+
         elif session.login['start_registering']:
+            session.login.update({'start_registering':False})
             with st.spinner("Onboarding..."):
                 login_button.empty()
-                is_success,response,problem = register_user(username,password)
-            if is_success:
-                session.login.update({'is_logged_in':True,
-                        'user_creds':response})
-                with st.spinner("going to main page..."):
-                    time.sleep(1)
-                st.rerun()
-            elif problem=='username':
-                error_msg.error("username already exists")
-                session.login.update({'existing_username':response})
-
-
+                is_success,response = auth_register_me(username,password)
             
-
-
+            if is_success:
+                error_msg.success("you have registered")
+                session.login.update({'is_logged_in':True,
+                        'user_creds':response['data']})
+                with st.spinner("going to main page..."):
+                    time.sleep(2)
+                st.rerun()
+            elif response['problem']=='username':
+                error_msg.error("username already exists")
+                session.login.update({'existing_username':response['existing_userlist']})
 
 # ----------- Upload Kirtan ------------
 def upload_kirtan():
@@ -294,8 +316,6 @@ def upload_kirtan():
                         'bookmark_list': [{'start_time':0,'start_time_raw':0,'display_time':'0m 0s','tune_hint':''}],
                         'process_step_2':False
                     })
-                
-
 
 # ----------- Browse Kirtans ------------
 def browse_kirtans():
@@ -314,54 +334,6 @@ def browse_kirtans():
             if st.button(f"Play {label} ({time}s)"):
                 st.audio("example.mp3", start_time=time)  # Replace with actual file
 
-# ----------- Youtube player ------------
-def noadd_youtube():
-    st.markdown("## :rainbow[noadd youtube]")
-    st.markdown(
-    """
-    <style>
-    #login-2-tunein {
-        text-align: center;
-        display: block;
-    }
-    .stButton {
-        text-align: center;
-        display: block;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-    )
-
-    if not session.noadd_yt['yt_id']:
-         url = st.text_input("Enter youtube url")
-         video_id = extract_youtube_video_id(url)
-         if video_id:
-             st.success(f"Video ID: `{video_id}`")
-             st.button("Continue next",
-                       on_click=lambda : session.noadd_yt.update({'yt_id':video_id}))
-         else :
-             st.warning("Enter a valid youtube url")
-             st.markdown("""
-    ### ✅ Supported YouTube URL Formats
-
-    You can input any of the following YouTube URL formats, and the video ID will be correctly extracted:
-
-    | URL Format | Example |
-    |------------|---------|
-    | **Standard Watch URL** | `https://www.youtube.com/watch?v=VIDEO_ID` |
-    | **Shortened URL** | `https://youtu.be/VIDEO_ID` |
-    | **Embed URL** | `https://www.youtube.com/embed/VIDEO_ID` |
-    | **Shorts URL** | `https://www.youtube.com/shorts/VIDEO_ID` |
-    | **Live Stream URL** | `https://www.youtube.com/live/VIDEO_ID` |
-    """)
-    
-    else:
-        pass
-
-
-
-
 
 # global css
 st.markdown(
@@ -378,11 +350,19 @@ st.markdown(
 
 # ----------- Main App ------------
 def main():
+    user_cred = session.login['user_creds']
     with st.sidebar:
         st.markdown("## :rainbow[Hare Krishna]")
+        st.markdown(f"### :rainbow[{user_cred['full_name']}]")
         st.divider()
-        
-    page_list = ['browse','upload','youtube']
+
+    access_list = user_cred['role_list']
+    
+    page_list = ['browse','upload'] if 'allow_upload' in access_list else ['browse']
+
+    if 'admin' in access_list :
+        page_list.append('pending_regs')
+
     active_page = st.segmented_control("label",label_visibility='collapsed',
                          options=page_list,selection_mode='single',
                          default=page_list[0]
@@ -390,16 +370,18 @@ def main():
     # ==============================================================
     if not active_page:
         st.warning("Please select a page")
+
     elif active_page=='browse':
         browse_kirtans()
+
     elif active_page=='upload':
         upload_kirtan()
-    elif active_page=='youtube':
-        st.caption("in progress")
+
+    elif active_page=='pending_regs':
+        st.markdown("under progress")
 
 
 if session.login['is_logged_in']:
     main()
 else:
     login_page()
-# noadd_youtube()

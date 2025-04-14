@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 venv/
 .env
-research.py
+research.*
 
 # Ignore Streamlit logs and config files
 .streamlit/
